@@ -2,83 +2,78 @@ import numpy as np
 from math import sin, log
 
 
-class SimpleDmp:
-    """A simple Ijspeert DMP with configurable forcing term."""
-    def __init__(self, executionTime, startPos, startVel, goalPos):
-        self.T = executionTime
+class SimpleDmp(object):
+    """A simple Ijspeert DMP without forcing term."""
+    def __init__(self, tau, x0, xd0, g):
+        self.tau = tau
         self.alpha = 25.0
         self.beta = 6.25
-        self.g = goalPos
-        self.y = startPos
-        self.z = self.T * startVel;
+        self.g = g
+        self.x = x0
+        self.xd = xd0
+        self.xdd = np.zeros_like(self.x)
 
     def step(self, dt):
-        f = 0.0
-        zd = ((self.alpha * (self.beta * (self.g - self.y)- self.z)) / self.T) * dt
-        yd = self.z / self.T * dt
-        self.y += yd
-        self.z += zd
+        self.x += self.xd * dt
+        self.xd += self.xdd * dt
+        self.xdd = self.transformation_system()
+
+    def transformation_system(self):
+        return (self.alpha * (self.beta * (self.g - self.x) - self.tau * self.xd)) / self.tau ** 2
 
     def run(self, dt, startT, endT):
-        """runs the whole dmp and returns ([ts], [ys], [yds])"""
+        """runs the whole dmp and returns ([ts], [xs], [xds])"""
         ts = []
-        ys = []
-        yds = []
+        xs = []
+        xds = []
         t = startT
         while t < endT:
             ts.append(t)
-            ys.append(self.y)
-            yds.append(self.z / self.T)
+            xs.append(self.x)
+            xds.append(self.xd)
             t += dt
             self.step(dt)
         ts.append(t)
-        ys.append(self.y)
-        yds.append(self.z / self.T)
+        xs.append(self.x)
+        xds.append(self.xd)
 
-        return (ts, ys, yds)
+        return ts, xs, xds
 
 
-class SinDmp:
-    """A simple Ijspeert DMP with sin(t) forcing term"""
-    def __init__(self, executionTime, startPos, startVel, goalPos, s):
-        self.T = executionTime
-        self.alpha = 25.0
-        self.beta = 6.25
-        self.g = goalPos
-        self.y = startPos
-        self.z = self.T * startVel;
+class SinDmp(SimpleDmp):
+    """A simple Ijspeert DMP with sin(t) forcing term."""
+    def __init__(self, tau, x0, xd0, g, s):
+        super(SinDmp, self).__init__(tau, x0, xd0, g)
         self.t = 0.0
         self.s = s
         self.f = sin(self.t * 10) * self.s
 
     def step(self, dt):
+        self.x += self.xd * dt
+        self.xd += self.xdd * dt
         self.f = sin(self.t * 10) * self.s
-        zd = ((self.alpha * (self.beta * (self.g - self.y)- self.z) + self.f) / self.T) * dt
-        yd = self.z / self.T * dt
-        self.y += yd
-        self.z += zd
-        self.t += dt
+        self.xdd = self.transformation_system() + self.f
 
     def run(self, dt, startT, endT):
         """runs the whole dmp and returns ([ts], [ys], [yds])"""
         ts = []
-        ys = []
-        yds = []
+        xs = []
+        xds = []
         fs = []
         t = startT
         while t < endT:
             ts.append(t)
-            ys.append(self.y)
-            yds.append(self.z / self.T)
+            xs.append(self.x)
+            xds.append(self.xd)
             fs.append(self.f)
             t += dt
             self.step(dt)
         ts.append(t)
-        ys.append(self.y)
-        yds.append(self.z / self.T)
+        xs.append(self.x)
+        xds.append(self.xd)
         fs.append(self.f)
 
-        return (ts, ys, yds, fs)
+        return (ts, xs, xds, fs)
 
 
 class CS:
