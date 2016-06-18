@@ -2,8 +2,7 @@ import numpy as np
 from math import sin, log
 
 
-class SimpleDmp(object):
-    """A simple Ijspeert DMP without forcing term."""
+class DmpBase(object):
     def __init__(self, tau, x0, xd0, g):
         self.tau = tau
         self.alpha = 25.0
@@ -12,15 +11,8 @@ class SimpleDmp(object):
         self.x = x0
         self.xd = xd0
         self.xdd = np.zeros_like(self.x)
+        self.t = 0.0
         self.f = 0.0
-
-    def step(self, dt):
-        self.x += self.xd * dt
-        self.xd += self.xdd * dt
-        self.xdd = self.transformation_system()
-
-    def transformation_system(self):
-        return (self.alpha * (self.beta * (self.g - self.x) - self.tau * self.xd)) / self.tau ** 2
 
     def run(self, dt, t0=0.0, execution_time=None):
         """runs the whole dmp and returns ([ts], [ys], [yds])"""
@@ -43,21 +35,33 @@ class SimpleDmp(object):
 
         return ts, xs, xds, fs
 
+    def step(self, dt):
+        self.t += dt
+        self.x += self.xd * dt
+        self.xd += self.xdd * dt
+        self.xdd = self.transformation_system()
+        self.f = self.forcing_term()
+        self.xdd = self.transformation_system() + self.f
+
+    def forcing_term(self, phase=None):
+        return 0.0
+
+    def transformation_system(self):
+        return 0.0
+
+
+class SimpleDmp(DmpBase):
+    """A simple Ijspeert DMP without forcing term."""
+    def transformation_system(self):
+        return (self.alpha * (self.beta * (self.g - self.x) - self.tau * self.xd)) / self.tau ** 2
+
 
 class SinDmp(SimpleDmp):
     """A simple Ijspeert DMP with sin(t) forcing term."""
     def __init__(self, tau, x0, xd0, g, s):
         super(SinDmp, self).__init__(tau, x0, xd0, g)
-        self.t = 0.0
         self.s = s
         self.f = sin(self.t * 10) * self.s
-
-    def step(self, dt):
-        self.t += dt
-        self.x += self.xd * dt
-        self.xd += self.xdd * dt
-        self.f = self.forcing_term()
-        self.xdd = self.transformation_system() + self.f
 
     def forcing_term(self, phase=None):
         return sin(self.t * 10) * self.s
