@@ -12,6 +12,7 @@ class SimpleDmp(object):
         self.x = x0
         self.xd = xd0
         self.xdd = np.zeros_like(self.x)
+        self.f = 0.0
 
     def step(self, dt):
         self.x += self.xd * dt
@@ -22,24 +23,25 @@ class SimpleDmp(object):
         return (self.alpha * (self.beta * (self.g - self.x) - self.tau * self.xd)) / self.tau ** 2
 
     def run(self, dt, t0=0.0, execution_time=None):
-        """runs the whole dmp and returns ([ts], [xs], [xds])"""
-        if execution_time is None:
-            execution_time = self.tau
+        """runs the whole dmp and returns ([ts], [ys], [yds])"""
         ts = []
         xs = []
         xds = []
+        fs = []
         t = t0
         while t < execution_time:
             ts.append(t)
             xs.append(self.x)
             xds.append(self.xd)
+            fs.append(self.f)
             t += dt
             self.step(dt)
         ts.append(t)
         xs.append(self.x)
         xds.append(self.xd)
+        fs.append(self.f)
 
-        return ts, xs, xds
+        return ts, xs, xds, fs
 
 
 class SinDmp(SimpleDmp):
@@ -59,27 +61,6 @@ class SinDmp(SimpleDmp):
 
     def forcing_term(self, phase=None):
         return sin(self.t * 10) * self.s
-
-    def run(self, dt, t0, execution_time):
-        """runs the whole dmp and returns ([ts], [ys], [yds])"""
-        ts = []
-        xs = []
-        xds = []
-        fs = []
-        t = t0
-        while t < execution_time:
-            ts.append(t)
-            xs.append(self.x)
-            xds.append(self.xd)
-            fs.append(self.f)
-            t += dt
-            self.step(dt)
-        ts.append(t)
-        xs.append(self.x)
-        xds.append(self.xd)
-        fs.append(self.f)
-
-        return (ts, xs, xds, fs)
 
 
 class CanonicalSystem:
