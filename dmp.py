@@ -21,13 +21,15 @@ class SimpleDmp(object):
     def transformation_system(self):
         return (self.alpha * (self.beta * (self.g - self.x) - self.tau * self.xd)) / self.tau ** 2
 
-    def run(self, dt, startT, endT):
+    def run(self, dt, t0=0.0, execution_time=None):
         """runs the whole dmp and returns ([ts], [xs], [xds])"""
+        if execution_time is None:
+            execution_time = self.tau
         ts = []
         xs = []
         xds = []
-        t = startT
-        while t < endT:
+        t = t0
+        while t < execution_time:
             ts.append(t)
             xs.append(self.x)
             xds.append(self.xd)
@@ -49,19 +51,23 @@ class SinDmp(SimpleDmp):
         self.f = sin(self.t * 10) * self.s
 
     def step(self, dt):
+        self.t += dt
         self.x += self.xd * dt
         self.xd += self.xdd * dt
-        self.f = sin(self.t * 10) * self.s
+        self.f = self.forcing_term()
         self.xdd = self.transformation_system() + self.f
 
-    def run(self, dt, startT, endT):
+    def forcing_term(self, phase=None):
+        return sin(self.t * 10) * self.s
+
+    def run(self, dt, t0, execution_time):
         """runs the whole dmp and returns ([ts], [ys], [yds])"""
         ts = []
         xs = []
         xds = []
         fs = []
-        t = startT
-        while t < endT:
+        t = t0
+        while t < execution_time:
             ts.append(t)
             xs.append(self.x)
             xds.append(self.xd)
@@ -76,107 +82,61 @@ class SinDmp(SimpleDmp):
         return (ts, xs, xds, fs)
 
 
-class CS:
-    def __init__(self, executionTime, lastPhaseValue = 0.01):
-        self.T = executionTime
-        self.alpha = -log(lastPhaseValue)
-        self.z = 1.0  # current phase value
+class CanonicalSystem:
+    def __init__(self, tau, last_s = 0.01):
+        self.tau = tau
+        self.alpha = -log(last_s)
+        self.s = 1.0  # current phase value
         self.t = 0.0  # current time
 
     def step(self, dt):
         """initially the cs is at phase 1. the first call to step will move it."""
-        self.z += (-self.alpha * self.z / self.T) * dt
+        self.s += (-self.alpha * self.s / self.tau) * dt
         self.t += dt
-        return self.z
+        return self.s
 
     def get_phases(self, times):
-        return np.exp(-self.alpha / self.T * times)
+        return np.exp(-self.alpha / self.tau * times)
 
     def reset(self):
-        self.z = 1.0
+        self.s = 1.0
         self.t = 0.0
 
 
-class SinDmpWithCS:
+class SinDmpWithCS(SinDmp):
     """A simple Ijspeert dmp with sin(t) forcing term"""
-    def __init__(self, executionTime, startPos, startVel, goalPos, s):
-        self.T = executionTime
-        self.alpha = 25.0
-        self.beta = 6.25
-        self.g = goalPos
-        self.y = startPos
-        self.z = self.T * startVel;
-        self.t = 0.0
-        self.s = s
-        self.cs = CS(executionTime)
+    def __init__(self, tau, x0, x0d, g, s):
+        super(SinDmpWithCS, self).__init__(tau, x0, x0d, g, s)
+        self.cs = CanonicalSystem(tau)
 
     def step(self, dt):
-        f = sin(self.t * 10) * self.s
-        phase = self.cs.step(dt)
-        f *= phase
-        zd = ((self.alpha * (self.beta * (self.g - self.y)- self.z) + f) / self.T) * dt
-        yd = self.z / self.T * dt
-        self.y += yd
-        self.z += zd
         self.t += dt
+        self.x += self.xd * dt
+        self.xd += self.xdd * dt
+        phase = self.cs.step(dt)
+        self.f = self.forcing_term(phase)
+        self.xdd = self.transformation_system() + self.f
 
-    def run(self, dt, startT, endT):
-        """runs the whole dmp and returns ([ts], [ys], [yds])"""
-        ts = []
-        ys = []
-        yds = []
-        t = startT
-        while t < endT:
-            ts.append(t)
-            ys.append(self.y)
-            yds.append(self.z / self.T)
-            t += dt
-            self.step(dt)
-        ts.append(t)
-        ys.append(self.y)
-        yds.append(self.z / self.T)
-
-        return (ts, ys, yds)
+    def forcing_term(self, phase):
+        return sin(self.t * 10) * self.s * phase
 
 
-class SinDmpWithCS2:
+class SinDmpWithCS2(SinDmpWithCS):
     """A simple Ijspeert dmp with sin(z) forcing term"""
-    def __init__(self, executionTime, startPos, startVel, goalPos, s):
-        self.T = executionTime
-        self.alpha = 25.0
-        self.beta = 6.25
-        self.g = goalPos
-        self.y = startPos
-        self.z = self.T * startVel;
-        self.s = s
-        self.cs = CS(executionTime)
+    def __init__(self, tau, x0, x0d, g, s):
+        super(SinDmpWithCS2, self).__init__(tau, x0, x0d, g, s)
 
     def step(self, dt):
+        self.t += dt
+        self.x += self.xd * dt
+        self.xd += self.xdd * dt
         phase = self.cs.step(dt)
-        f = sin((1.0 - phase) * 10) * self.s
-        f *= phase
-        zd = ((self.alpha * (self.beta * (self.g - self.y)- self.z) + f) / self.T) * dt
-        yd = self.z / self.T * dt
-        self.y += yd
-        self.z += zd
+        self.f = self.forcing_term(phase)
+        self.xdd = self.transformation_system() + self.f
 
-    def run(self, dt, startT, endT):
-        """runs the whole dmp and returns ([ts], [ys], [yds])"""
-        ts = []
-        ys = []
-        yds = []
-        t = startT
-        while t < endT:
-            ts.append(t)
-            ys.append(self.y)
-            yds.append(self.z / self.T)
-            t += dt
-            self.step(dt)
-        ts.append(t)
-        ys.append(self.y)
-        yds.append(self.z / self.T)
+    def forcing_term(self, phase):
+        return sin((1.0 - phase) * 10) * self.s * phase
 
-        return (ts, ys, yds)
 
 class Rbf:
     """A simple radial basis function approximator"""
@@ -211,22 +171,6 @@ class Rbf:
         nom = np.dot(self.weights, psi) * z
         denom = np.sum(psi)
         return nom / denom
-
-    def plot_gaussians(self):
-        points_in_time = np.linspace(0.0, executionTime * 1.3, num=600)
-        points_in_phase = self.cs.get_phases(points_in_time)
-        for i in range(self.numWeights):#for each guassian
-            values = np.exp(-self.widths[i] * (points_in_phase - self.centers[i])**2)
-            plt.plot(points_in_phase, values)
-            plt.plot(points_in_time, values)
-
-    def plot_function(self):
-        points_in_time = np.linspace(0.0, executionTime * 1.3, num=600)
-        points_in_phase = self.cs.get_phases(points_in_time)
-        values = []
-        for z in points_in_phase:
-            values.append(self.evaluate(z))
-        plt.plot(points_in_time, values)
 
     def psi(self, i, phases):
         """evaluates the i'th gaussian at the specified phases and returns the results as vector"""
