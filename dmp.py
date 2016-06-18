@@ -162,18 +162,17 @@ class Rbf:
 
 class DmpWithImitation:
     """A simple Ijspeert dmp with forcing term"""
-    def __init__(self, executionTime, startPos, startVel, goalPos, cs,
-                 numWeights, overlap, scale):
-        self.T = executionTime
+    def __init__(self, tau, x0, x0d, g, cs, n_weights, overlap, scale):
+        self.T = tau
         self.cs = cs
         self.alpha = 25.0
         self.beta = 6.25
-        self.g = goalPos
-        self.y = startPos
-        self.startPos = startPos
-        self.z = self.T * startVel;
+        self.g = g
+        self.y = x0
+        self.startPos = x0
+        self.z = self.T * x0d;
         self.startZ = self.z
-        self.rbf = Rbf(cs, executionTime, numWeights, overlap)
+        self.rbf = Rbf(cs, tau, n_weights, overlap)
         self.amplitude = 0
         self.scale = scale
 
