@@ -167,28 +167,28 @@ class Rbf:
 class DmpWithImitation:
     """A simple Ijspeert dmp with forcing term"""
     def __init__(self, tau, x0, x0d, g, cs, n_weights, overlap, scale):
-        self.T = tau
+        self.tau = tau
         self.cs = cs
         self.alpha = 25.0
         self.beta = 6.25
         self.g = g
-        self.y = x0
-        self.startPos = x0
-        self.z = self.T * x0d;
+        self.x = x0
+        self.x0 = x0
+        self.z = self.tau * x0d
         self.startZ = self.z
         self.rbf = Rbf(cs, tau, n_weights, overlap)
         self.amplitude = 0
         self.scale = scale
 
     def step(self, dt):
-        z = self.cs.step(dt)
-        f = self.rbf.evaluate(z)
+        phase = self.cs.step(dt)
+        f = self.rbf.evaluate(phase)
         if self.scale:
-            f *= (self.g - self.startPos) / self.amplitude
+            f *= (self.g - self.x0) / self.amplitude
 
-        zd = ((self.alpha * (self.beta * (self.g - self.y)- self.z) + f) / self.T) * dt
-        yd = self.z / self.T * dt
-        self.y += yd
+        zd = ((self.alpha * (self.beta * (self.g - self.x) - self.z) + f) / self.tau) * dt
+        yd = self.z / self.tau * dt
+        self.x += yd
         self.z += zd
 
     def imitate(self, times, positions, dt):
@@ -197,38 +197,40 @@ class DmpWithImitation:
         self.amplitude = positions[-1] - positions[0]
         velocities = np.gradient(positions, dt)
         accelerations = np.gradient(velocities, dt)
-        goal = positions[len(positions) - 1]
-        references = self.T**2 * accelerations - self.alpha * (self.beta * (goal - positions) - self.T * velocities)
+        goal = positions[-1]
+
+        forces = self.tau ** 2 * accelerations - self.alpha * (self.beta * (goal - positions) - self.tau * velocities)
         phases = self.cs.get_phases(times)
+
         weights = np.ndarray(self.rbf.numWeights)
         for i in range(self.rbf.numWeights):
             psi = self.rbf.psi(i, phases)
             psiD = np.diag(psi)
-            weights[i] = np.linalg.inv([[np.dot(phases.T, np.dot(psiD, phases))]]) * np.dot(phases.T, np.dot(psiD, references))
+            weights[i] = (np.linalg.inv([[np.dot(phases.T, np.dot(psiD, phases))]]) *
+                          np.dot(phases.T, np.dot(psiD, forces)))
         self.rbf.set_weights(weights)
 
-    def run(self, dt, startTime = 0.0, endTime = None):
-        """runs the whole dmp and returns ([ts], [ys], [yds])"""
+    def run(self, dt, t0=0.0, execution_time=None):
         ts = []
-        ys = []
-        yds = []
-        t = startTime
-        if endTime is None:
-            endTime = self.T
-        while t < endTime:
+        xs = []
+        xds = []
+        t = t0
+        if execution_time is None:
+            execution_time = self.tau
+        while t < execution_time:
             ts.append(t)
-            ys.append(self.y)
-            yds.append(self.z / self.T)
+            xs.append(self.x)
+            xds.append(self.z / self.tau)
             t += dt
             self.step(dt)
         ts.append(t)
-        ys.append(self.y)
-        yds.append(self.z / self.T)
-        return (ts, ys, yds)
+        xs.append(self.x)
+        xds.append(self.z / self.tau)
+        return ts, xs, xds
 
-    def reset(self, cs, goal, executionTime, start):
+    def reset(self, cs, goal, tau, x0):
         self.cs = cs
         self.g = goal
-        self.T = executionTime
-        self.y = start
+        self.tau = tau
+        self.x = x0
         self.z = self.startZ
