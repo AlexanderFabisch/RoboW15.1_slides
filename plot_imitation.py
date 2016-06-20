@@ -131,6 +131,7 @@ class DmpWithImitation:
         self.g = goal
         self.tau = tau
         self.x = x0
+        self.x0 = x0
         self.xd = self.start_xd
 
 
@@ -146,22 +147,25 @@ def plot_imitation(demo, ax=None, legend=True):
         overlap=0.2, scale=False)
     dmp.imitate(times, demo, dt)
 
-    dmp.reset(CanonicalSystem(tau), 0.0, tau, 1.0)
-    ts, ys, yds = dmp.run(0.001)
-
     if ax is None:
         ax = plt.subplot(111)
-
     ax.plot(times, demo, "r")
+
+    dmp.reset(CanonicalSystem(tau), demo[-1], tau, demo[0])
+    ts, ys, yds = dmp.run(0.001)
+    ax.plot(ts, ys)
+
+    dmp.reset(CanonicalSystem(tau), -0.5, tau, 0)
+    ts, ys, yds = dmp.run(0.001)
     ax.plot(ts, ys)
 
     if legend:
-        ax.legend(["Demo", "Imitated"], loc="upper left")
+        ax.legend(["Demo", "Imitated", "New start and goal"], loc="upper left")
 
     return ax
 
 
-demo = np.sin(np.linspace(0, 2 * np.pi, 100))
+demo = np.sin(np.linspace(0, 1.5 * np.pi, 100))
 ax = plot_imitation(demo)
 ax.set_xlabel("Time")
 ax.set_ylabel("X Position")
